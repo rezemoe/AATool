@@ -27,6 +27,7 @@ namespace AATool.Winforms.Forms
         public FNotes()
         {
             this.InitializeComponent();
+            MonoCompat.FixNestedScaling(this);
             this.Width = Config.Notes.Width;
             this.Height = Config.Notes.Height;
             this.TopMost = Config.Notes.AlwaysOnTop;

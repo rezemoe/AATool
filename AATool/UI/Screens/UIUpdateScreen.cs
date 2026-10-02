@@ -31,23 +31,25 @@ namespace AATool.UI.Screens
         private List<UIPicture> textTinted;
 
         private bool postInstall;
+        private Point renderSize;
 
         public override Color FrameBackColor() => Config.Main.BackColor;
         public override Color FrameBorderColor() => Config.Main.BorderColor;
 
-        public UIUpdateScreen(Main main, bool postInstall) : base(main, GameWindow.Create(main, 700, 360))
+        public UIUpdateScreen(Main main, bool postInstall) : base(main, new ScreenWindow("AATool Update", 700, 360))
         {
-            this.Form.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
+            this.Host.Resizable = false;
             this.postInstall = postInstall;
 
             this.ReloadView();
             this.ConstrainWindow();
-            int x = Main.PrimaryScreen.Form.Left + (Main.PrimaryScreen.Form.ClientSize.Width / 2) - (this.Window.ClientBounds.Width / 2);
-            int y = Main.PrimaryScreen.Form.Top + (Main.PrimaryScreen.Form.ClientSize.Height / 2) - (this.Window.ClientBounds.Height / 2);
-            this.Form.Location = new System.Drawing.Point(x, y);
-            this.Form.Icon = new System.Drawing.Icon(Paths.System.UpdateIcon);
-            this.Form.TopMost = Config.Main.AlwaysOnTop;
-            this.Form.Show();
+            ScreenWindow primary = Main.PrimaryScreen.Host;
+            int x = primary.Location.X + (primary.ClientSize.X / 2) - (this.Host.ClientSize.X / 2);
+            int y = primary.Location.Y + (primary.ClientSize.Y / 2) - (this.Host.ClientSize.Y / 2);
+            this.Host.Location = new Point(x, y);
+            this.SetIconFile(Paths.System.UpdateIcon);
+            this.Host.TopMost = Config.Main.AlwaysOnTop;
+            this.Host.Show();
         }
 
         public override string GetCurrentView()
@@ -68,17 +70,15 @@ namespace AATool.UI.Screens
 
         protected override void ConstrainWindow()
         {
-            int width  = this.Form.ClientSize.Width;
-            int height = this.Form.ClientSize.Height;
+            int width  = this.Host.ClientSize.X;
+            int height = this.Host.ClientSize.Y;
             if (width is 0 || height is 0)
                 return;
 
-            //resize window and create new render target of proper size
-            if (this.Target is null || this.Target.Width != width || this.Target.Height != height)
+            //resize layout to fit window
+            if (this.renderSize.X != width || this.renderSize.Y != height)
             {
-                this.Form.ClientSize = new System.Drawing.Size(width, height);
-                this.Target?.Dispose();
-                this.Target = new SwapChainRenderTarget(this.GraphicsDevice, this.Window.Handle, width, height);
+                this.renderSize = new Point(width, height);
                 this.ResizeRecursive(new Rectangle(0, 0, width, height));
             }
         }
@@ -146,11 +146,11 @@ namespace AATool.UI.Screens
             //update button visibility
             if (UpdateRequest.UpdatesAreAvailable())
             {
-                this.Form.Text = $"Updates are available!";
+                this.Host.Title = $"Updates are available!";
             }
             else if (this.postInstall && !Main.IsBeta)
             {
-                this.Form.Text = $"Welcome to AATool {Main.Version}!";
+                this.Host.Title = $"Welcome to AATool {Main.Version}!";
                 this.closeButton?.Expand();
                 this.nowButton?.Collapse();
                 this.laterButton?.Collapse();
@@ -164,22 +164,22 @@ namespace AATool.UI.Screens
                 //update text
                 if (Main.IsModded)
                 {
-                    this.Form.Text = $"You are running {Main.ShortTitle}";
+                    this.Host.Title = $"You are running {Main.ShortTitle}";
                     this.hasLatestLabel?.SetText("You're on an unofficial build");
                 }
                 if (Main.IsBeta)
                 {
-                    this.Form.Text = $"You are running {Main.ShortTitle}";
+                    this.Host.Title = $"You are running {Main.ShortTitle}";
                     this.hasLatestLabel?.SetText("You're ahead of the latest release!");
                 }
                 else if (Main.Version > UpdateRequest.LatestVersion)
                 {
-                    this.Form.Text = $"You are on a preview version of AATool ({Main.Version})";
+                    this.Host.Title = $"You are on a preview version of AATool ({Main.Version})";
                     this.hasLatestLabel?.SetText("You're ahead of the latest release!");
                 }
                 else
                 {
-                    this.Form.Text = $"You are already on the latest version of AATool ({Main.Version})";
+                    this.Host.Title = $"You are already on the latest version of AATool ({Main.Version})";
                     this.hasLatestLabel?.SetText("Latest version already installed!");
                 }
             }
@@ -239,7 +239,7 @@ namespace AATool.UI.Screens
 
         protected override void UpdateThis(Time time)
         {
-            if (this.Form.IsDisposed)
+            if (this.Host.IsDisposed)
                 return;
 
             //make sure certain icons match text color
@@ -247,7 +247,7 @@ namespace AATool.UI.Screens
                 picture.SetTint(Config.Main.TextColor);
 
             if (Config.Main.AlwaysOnTop.Changed)
-                this.Form.TopMost = Config.Main.AlwaysOnTop;
+                this.Host.TopMost = Config.Main.AlwaysOnTop;
 
             base.UpdateThis(time);
         }
@@ -257,7 +257,7 @@ namespace AATool.UI.Screens
             if (sender == this.nowButton)
                 UpdateHelper.RunAAUpdate(0);
             else if (sender == this.laterButton || sender == this.closeButton)
-                this.Form.Close();
+                this.Host.Close();
             else if (sender == this.githubButton)
                 _ = Process.Start(Paths.Web.LatestRelease);
             else if (sender == this.patreonButton)

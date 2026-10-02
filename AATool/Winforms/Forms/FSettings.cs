@@ -15,6 +15,7 @@ namespace AATool.Winforms.Forms
         public FSettings()
         {
             this.InitializeComponent();
+            MonoCompat.FixNestedScaling(this);
             if (!this.DesignMode)
                 this.LoadSettings();
         }

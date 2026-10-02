@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using AATool.Data.Speedrunning;
 using AATool.UI.Controls;
+using AATool.Utilities;
 using Microsoft.Xna.Framework.Graphics;
 
 namespace AATool.Net.Requests
@@ -42,7 +43,7 @@ namespace AATool.Net.Requests
                             string cacheFile = Paths.System.SpeedrunDotComProfilePicture(profile.Id);
                             Directory.CreateDirectory(Paths.System.ProfilePicturesCacheFolder);
                             using (FileStream fileStream = File.Create(cacheFile))
-                                picture.SaveAsPng(fileStream, picture.Width, picture.Height);
+                                MainThread.Invoke(() => picture.SaveAsPng(fileStream, picture.Width, picture.Height));
                             profile.Picture = picture;
                         }
                     }

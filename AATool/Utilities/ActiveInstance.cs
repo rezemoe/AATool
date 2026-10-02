@@ -36,6 +36,7 @@ namespace AATool.Utilities
 
         private static readonly Timer RefreshCooldown = new (1);
 
+        private static string ActiveTitle;
         private static string LatestLogContents;
         private static string LatestGameVersion;
         private static DateTime LastLogWriteTimeUtc;
@@ -94,6 +95,9 @@ namespace AATool.Utilities
 
         private static string CommandLine(this Process process)
         {
+            if (!Platform.IsWindows)
+                return Platform.GetCommandLine(process);
+
             string query = $"SELECT CommandLine FROM Win32_Process WHERE ProcessId = {process.Id}";
             using (var searcher = new ManagementObjectSearcher(query))
             using (ManagementObjectCollection objects = searcher.Get())
@@ -109,14 +113,27 @@ namespace AATool.Utilities
             try
             {
                 Debug.BeginTiming("get_active_instance");
-                IntPtr hWnd = GetForegroundWindow();
-                GetWindowThreadProcessId(hWnd, out uint processId);
-                var active = Process.GetProcessById((int)processId);
+                Process active = null;
+                string title = null;
+                if (Platform.IsWindows)
+                {
+                    IntPtr hWnd = GetForegroundWindow();
+                    GetWindowThreadProcessId(hWnd, out uint processId);
+                    active = Process.GetProcessById((int)processId);
+                    title = active.MainWindowTitle;
+                }
+                else if (X11Native.TryGetForegroundWindow(out int processId, out title))
+                {
+                    active = Process.GetProcessById(processId);
+                }
                 Debug.EndTiming("get_active_instance");
 
-                //verify that process is an instance of minecraft 
-                if (active.ProcessName.StartsWith("java") && active.MainWindowTitle.StartsWith("Minecraft"))
+                //verify that process is an instance of minecraft
+                if (active is not null && active.ProcessName.StartsWith("java") && title?.StartsWith("Minecraft") is true)
+                {
                     instance = active;
+                    ActiveTitle = title;
+                }
             }
             catch
             {
@@ -139,7 +156,9 @@ namespace AATool.Utilities
                     //try parsing path
                     //flag specifies ".minecraft" directory
                     Match match = Regex.Match(args, @$"{GameDirFlag}(?:""(.+?)""|([^\s]+))");
-                    path = args.Substring(match.Index + GameDirFlag.Length, match.Length - GameDirFlag.Length) + "\\";
+                    path = Platform.IsWindows
+                        ? args.Substring(match.Index + GameDirFlag.Length, match.Length - GameDirFlag.Length) + "\\"
+                        : (match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value) + Path.DirectorySeparatorChar;
                 }
                 else
                 {
@@ -153,13 +172,13 @@ namespace AATool.Utilities
                         length -= 1;
                         index += 1;
                     }
-                    path = args.Substring(index + NativesFlag.Length, length - NativesFlag.Length - 8) + ".minecraft\\";
-                    path = path.Replace("/", "\\");
+                    path = args.Substring(index + NativesFlag.Length, length - NativesFlag.Length - 8) + ".minecraft" + Path.DirectorySeparatorChar;
+                    path = path.Replace('/', Path.DirectorySeparatorChar);
 
                     if (!Directory.Exists(path))
                     {
-                        path = args.Substring(index + NativesFlag.Length, length - NativesFlag.Length - 8) + "minecraft\\";
-                        path = path.Replace("/", "\\");
+                        path = args.Substring(index + NativesFlag.Length, length - NativesFlag.Length - 8) + "minecraft" + Path.DirectorySeparatorChar;
+                        path = path.Replace('/', Path.DirectorySeparatorChar);
                     }
                 }
                 folder = new DirectoryInfo(path);
@@ -235,7 +254,7 @@ namespace AATool.Utilities
         private static void UpdateGameVersion(Process instance)
         {
             //get game version number from second word of title
-            string[] title = instance.MainWindowTitle.Split(' ');
+            string[] title = (ActiveTitle ?? string.Empty).Split(' ');
             if (title.Length > 1)
                 LatestGameVersion = title[1];
         }

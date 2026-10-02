@@ -19,6 +19,7 @@ namespace AATool.Winforms.Forms
         public FNetworkSetup()
         {
             this.InitializeComponent();
+            MonoCompat.FixNestedScaling(this);
             this.Width  = 500;
             this.Height = 320;
             this.back.Hide();

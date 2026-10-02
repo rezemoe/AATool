@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -87,12 +88,12 @@ namespace AATool.UI.Screens
         public override Color FrameBackColor() => Config.Main.BackColor;
         public override Color FrameBorderColor() => Config.Main.BorderColor;
 
-        public UIMainScreen(Main main) : base(main, main.Window)
+        public UIMainScreen(Main main) : base(main, ScreenWindow.Primary)
         {
             //set window title
-            this.Form.Text = Main.FullTitle;
-            this.Form.FormClosing += this.OnClosing;
-            this.Form.TopMost = Config.Main.AlwaysOnTop;
+            this.Host.Title = Main.FullTitle;
+            this.Host.Closing += this.OnClosing;
+            this.Host.TopMost = Config.Main.AlwaysOnTop;
             this.checklist = new(this);
         }
 
@@ -113,11 +114,11 @@ namespace AATool.UI.Screens
             if (Settings is null || Settings.IsDisposed)
             {
                 Settings = new FSettings();
-                Settings.Show(this.Form);
+                Settings.Show(this.Host.Owner);
             }
         }
 
-        private void OnClosing(object sender, FormClosingEventArgs e)
+        private void OnClosing(object sender, CancelEventArgs e)
         {
             if (Peer.IsServer && Peer.TryGetLobby(out Lobby lobby) && lobby.UserCount > 1)
             {
@@ -125,7 +126,7 @@ namespace AATool.UI.Screens
                 string caption = "Co-op Shutdown Confirmation";
                 string players = clients is 1 ? "1 player" : $"{clients} players";
                 string text = $"You are currently hosting a Co-op lobby with {players} connected! Are you sure you want to quit?";
-                DialogResult result = MessageBox.Show(this.Form, text, caption,
+                DialogResult result = MessageBox.Show(this.Host.Owner, text, caption,
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Exclamation);
 
@@ -138,7 +139,7 @@ namespace AATool.UI.Screens
             //remember main window position
             if (Config.Main.StartupArrangement == WindowSnap.Remember)
             {
-                Config.Main.LastWindowPosition.Set(new Point(this.Form.Location.X, this.Form.Location.Y));
+                Config.Main.LastWindowPosition.Set(this.Host.Location);
                 Config.Main.TrySave();
             }
 
@@ -293,7 +294,7 @@ namespace AATool.UI.Screens
                 Settings?.UpdateOverlayWidth();
 
             if (Config.Main.AlwaysOnTop.Changed)
-                this.Form.TopMost = Config.Main.AlwaysOnTop;
+                this.Host.TopMost = Config.Main.AlwaysOnTop;
 
             _= Tracker.GetMainPlayer();
             if (Tracker.MainPlayerChanged)
@@ -331,17 +332,24 @@ namespace AATool.UI.Screens
         {
             int width = this.grid?.GetExpandedWidth() ?? 1200;
             int height = this.grid?.GetExpandedHeight() ?? 600;
-            if (this.Width != width || this.Height != height || Tracker.ObjectivesChanged)
+            //the backbuffer is the size of the window, and the canvas scales the layout up to fill it
+            int scaledWidth  = width * Config.Main.DisplayScale;
+            int scaledHeight = height * Config.Main.DisplayScale;
+            bool layoutResized = this.Width != width || this.Height != height || Tracker.ObjectivesChanged;
+            if (layoutResized
+                || Main.GraphicsManager.PreferredBackBufferWidth != scaledWidth
+                || Main.GraphicsManager.PreferredBackBufferHeight != scaledHeight)
             {
-                //this.Form.ClientSize = new System.Drawing.Size(width * Config.Main.DisplayScale, height * Config.Main.DisplayScale);
-                Main.GraphicsManager.PreferredBackBufferWidth  = width;
-                Main.GraphicsManager.PreferredBackBufferHeight = height;
+                Main.GraphicsManager.PreferredBackBufferWidth  = scaledWidth;
+                Main.GraphicsManager.PreferredBackBufferHeight = scaledHeight;
                 Main.GraphicsManager.ApplyChanges();
+            }
+            if (layoutResized)
+            {
                 this.ResizeRecursive(new Rectangle(0, 0, width, height));
                 RenderCache?.Dispose();
                 RenderCache = new RenderTarget2D(this.GraphicsDevice, width, height);
             }
-            this.Form.ClientSize = new System.Drawing.Size(width * Config.Main.DisplayScale, height * Config.Main.DisplayScale);
 
             //snap window to user's preferred location
             if (!this.Positioned || Config.Main.StartupArrangement.Changed || Config.Main.StartupDisplay.Changed)

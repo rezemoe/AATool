@@ -10,6 +10,7 @@ namespace AATool.Winforms.Forms
         public FOpenTrackerSetup()
         {
             this.InitializeComponent();
+            MonoCompat.FixNestedScaling(this);
             this.aaKey.Text = Config.Tracking.OpenTrackerKey;
             this.url.Text = Config.Tracking.OpenTrackerUrl;
         }

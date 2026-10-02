@@ -14,6 +14,13 @@ namespace AATool.Utilities
 
         public static void RunAAUpdate(int exitCode)
         {
+            if (!Platform.SupportsAutoUpdate)
+            {
+                //aaupdate only installs windows builds, so send user to the release page instead
+                _ = Process.Start(Paths.Web.LatestRelease);
+                return;
+            }
+
             //start update executable with "return to AATool after" flag
             Process.Start(Paths.System.UpdateExecutable, "-r");
             Environment.Exit(exitCode);

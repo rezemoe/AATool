@@ -59,15 +59,22 @@ namespace AATool
             Directory.CreateDirectory(Paths.System.LogsFolder);
             using (StreamWriter stream = File.CreateText(Paths.System.CrashLogFile))
             {
-                var searcher = new ManagementObjectSearcher("select * from Win32_OperatingSystem");
-                foreach (ManagementObject managementObject in searcher.Get())
+                if (Platform.IsWindows)
                 {
-                    if (managementObject["Caption"] != null)
-                        stream.WriteLine("OS: " + managementObject["Caption"].ToString());
-                    if (managementObject["OSArchitecture"] != null)
-                        stream.WriteLine("Architecture: " + managementObject["OSArchitecture"].ToString());
-                    if (managementObject["CSDVersion"] != null)
-                        stream.WriteLine("Service Pack: " + managementObject["CSDVersion"].ToString());
+                    var searcher = new ManagementObjectSearcher("select * from Win32_OperatingSystem");
+                    foreach (ManagementObject managementObject in searcher.Get())
+                    {
+                        if (managementObject["Caption"] != null)
+                            stream.WriteLine("OS: " + managementObject["Caption"].ToString());
+                        if (managementObject["OSArchitecture"] != null)
+                            stream.WriteLine("Architecture: " + managementObject["OSArchitecture"].ToString());
+                        if (managementObject["CSDVersion"] != null)
+                            stream.WriteLine("Service Pack: " + managementObject["CSDVersion"].ToString());
+                    }
+                }
+                else
+                {
+                    stream.WriteLine("OS: " + Platform.Describe());
                 }
 
                 if (!Directory.Exists("assets"))

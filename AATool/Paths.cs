@@ -123,8 +123,24 @@ namespace AATool
 
         public static class Saves
         {
-            public const string AppDataShortcut = "%AppData%\\Roaming";
-            private static readonly string AppDataFolderPath = GetFolderPath(SpecialFolder.ApplicationData);
+            //on windows minecraft lives in %AppData%\Roaming\.minecraft, elsewhere it lives in ~/.minecraft
+            public static readonly string AppDataShortcut = Platform.IsWindows ? "%AppData%\\Roaming" : "~";
+            private static readonly string AppDataFolderPath = Platform.IsWindows
+                ? GetFolderPath(SpecialFolder.ApplicationData)
+                : GetFolderPath(SpecialFolder.UserProfile);
+
+            public static readonly string DefaultCustomSavesPath = Path.Combine(AppDataShortcut, ".minecraft", "saves");
+
+            public static string ExpandShortcut(string path)
+            {
+                if (Platform.IsWindows)
+                    return path.Replace(AppDataShortcut, AppDataFolderPath);
+
+                //only expand "~" at the start of the path
+                return path == AppDataShortcut || path.StartsWith(AppDataShortcut + "/")
+                    ? AppDataFolderPath + path.Substring(AppDataShortcut.Length)
+                    : path;
+            }
 
             public static string CurrentFolder()
             {
@@ -132,7 +148,7 @@ namespace AATool
                     return System.SftpWorldsFolder;
 
                 return Tracker.Source is TrackerSource.CustomSavesPath
-                    ? Config.Tracking.CustomSavesPath.Value.Replace(AppDataShortcut, AppDataFolderPath)
+                    ? ExpandShortcut(Config.Tracking.CustomSavesPath.Value)
                     : ActiveInstance.SavesPath;
             }
 
@@ -147,7 +163,7 @@ namespace AATool
             }
 
             public static string DefaultAppDataSavesPath => Path.Combine(
-                GetFolderPath(SpecialFolder.ApplicationData),
+                AppDataFolderPath,
                 ".minecraft",
                 "saves");
 

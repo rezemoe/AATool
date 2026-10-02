@@ -226,33 +226,40 @@ namespace AATool.Graphics
                         texture.Tag = sprite;
                     }
                 }
-
-                //add new textures to the atlas
-                Render(textures);
-                Loading = false;
             }
+
+            //add new textures to the atlas
+            //rendering happens on the main thread, so the sprite locks must be released first
+            Render(textures);
+            Loading = false;
         }
 
         public static void Replace(string key, Texture2D replacement)
         {
             if (TryGet(key, out Sprite existing))
+                MainThread.Invoke(() => ReplaceInAtlas(existing, replacement));
+        }
+
+        private static void ReplaceInAtlas(Sprite existing, Texture2D replacement)
+        {
+            lock (Atlas)
             {
-                lock (Atlas)
-                {
-                    //create spritebatch and prepare rendertarget
-                    Main.Device.SetRenderTarget(Atlas);
-                    InternalBatch.Begin();
+                //create spritebatch and prepare rendertarget
+                Main.Device.SetRenderTarget(Atlas);
+                InternalBatch.Begin();
 
-                    //draw over existing texture
-                    InternalBatch.Draw(replacement, existing.Source, Color.White);
+                //draw over existing texture
+                InternalBatch.Draw(replacement, existing.Source, Color.White);
 
-                    InternalBatch.End();
-                    Main.Device.SetRenderTarget(null);
-                }
+                InternalBatch.End();
+                Main.Device.SetRenderTarget(null);
             }
         }
 
-        private static void Render(params Texture2D[] textures)
+        private static void Render(params Texture2D[] textures) =>
+            MainThread.Invoke(() => RenderToAtlas(textures));
+
+        private static void RenderToAtlas(Texture2D[] textures)
         {
             //make sure atlas texture is big enough to render to
             ExpandRenderTarget(OffsetY + ActiveRowHeight);

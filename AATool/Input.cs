@@ -40,9 +40,7 @@ namespace AATool
             else
             {
                 //normalize cursor position on secondary windows
-                return new Point(
-                    MouseNow.Position.X + Main.PrimaryScreen.Form.Location.X - screen.Form.Location.X,
-                    MouseNow.Position.Y + Main.PrimaryScreen.Form.Location.Y - screen.Form.Location.Y);
+                return MouseNow.Position + Main.PrimaryScreen.Host.Location - screen.Host.Location;
             }
         }
 
@@ -63,7 +61,7 @@ namespace AATool
         public static void BeginUpdate(bool active)
         {
             IsActive = active;
-            MouseNow = Mouse.GetState();
+            MouseNow = ScreenWindow.GetMouseState();
             ScrollNow = MouseNow.ScrollWheelValue;
             if (active)
             {

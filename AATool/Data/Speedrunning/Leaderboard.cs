@@ -44,7 +44,8 @@ namespace AATool.Data.Speedrunning
         public static TimeSpan AASsgRealTime { get; private set; }
 
 
-        public static readonly TimeZoneInfo TimeZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+        public static readonly TimeZoneInfo TimeZone = TimeZoneInfo.FindSystemTimeZoneById(
+            Platform.IsWindows ? "Eastern Standard Time" : "America/New_York");
 
         public static readonly string[] AAVersions = AllAdvancements.SupportedVersions.Union(
             new [] { "1.11", "1.6" }

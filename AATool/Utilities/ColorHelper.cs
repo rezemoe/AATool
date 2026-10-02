@@ -102,7 +102,7 @@ namespace AATool.Utilities
             float b = 0;
             float total = 0;
             var colors = new Color[texture.Width * texture.Height];
-            texture.GetData(colors);
+            MainThread.Invoke(() => texture.GetData(colors));
             for (int i = 0; i < colors.Length; i++)
             {
                 Color pixel = colors[i];

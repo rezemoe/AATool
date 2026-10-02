@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- keep build intermediates out of the source folders, next to the compiled output -->
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)compiled\temp\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

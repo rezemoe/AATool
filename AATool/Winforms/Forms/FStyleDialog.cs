@@ -33,6 +33,7 @@ namespace AATool.Winforms.Forms
         public FStyleDialog(bool overlay)
         {
             this.InitializeComponent();
+            MonoCompat.FixNestedScaling(this);
             this.isOverlay = overlay;
 
             this.back = ColorHelper.ToDrawing(Config.Main.BackColor);

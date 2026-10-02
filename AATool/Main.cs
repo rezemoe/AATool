@@ -71,6 +71,7 @@ namespace AATool
 
         public Main()
         {
+            MainThread.Initialize();
             Version = Assembly.GetExecutingAssembly().GetName().Version;
             GraphicsManager = new GraphicsDeviceManager(this);
             RNG = new Random();
@@ -83,6 +84,9 @@ namespace AATool
             this.InactiveSleepTime = TimeSpan.Zero;
             this.IsFixedTimeStep = true;
             this.IsMouseVisible = true;
+
+            //every window presents separately, so waiting for vsync on each would divide the framerate
+            GraphicsManager.SynchronizeWithVerticalRetrace = false;
             this.Time = new Time();
         }
 
@@ -118,18 +122,25 @@ namespace AATool
             this.UpdateTitle();
 
             //instantiate screens
+            ScreenWindow.Initialize(this);
             SecondaryScreens = new ();
             PrimaryScreen = new UIMainScreen(this);
             OverlayScreen = new UIOverlayScreen(this);
             this.AddScreen(OverlayScreen);
-            PrimaryScreen.Form.BringToFront();
+            PrimaryScreen.Host.BringToFront();
 
             base.Initialize();
         }
 
         protected override void Update(GameTime gameTime)
         {
-            Input.BeginUpdate(this.IsActive);
+            //handle events for secondary windows and settings menus
+            ScreenWindow.ProcessEvents();
+            MainThread.RunPending();
+            if (!Platform.IsWindows && Application.OpenForms.Count > 0)
+                Application.DoEvents();
+
+            Input.BeginUpdate(this.IsActive || ScreenWindow.AnyFocused());
 
             this.Time.Update(gameTime);
 
@@ -152,8 +163,13 @@ namespace AATool
 
             //update each screen
             PrimaryScreen.UpdateRecursive(this.Time);
-            foreach (UIScreen screen in SecondaryScreens.Values)
-                screen.UpdateRecursive(this.Time);
+            foreach (UIScreen screen in SecondaryScreens.Values.ToArray())
+            {
+                if (screen.Host.IsDisposed)
+                    SecondaryScreens.Remove(screen.GetType());
+                else
+                    screen.UpdateRecursive(this.Time);
+            }
 
             //update notes screen
             if (Config.Notes.Enabled)
@@ -208,6 +224,8 @@ namespace AATool
                 //render each secondary screen to its respective viewport
                 foreach (UIScreen screen in SecondaryScreens.Values)
                 {
+                    if (!screen.Host.Visible)
+                        continue;
                     screen.Prepare();
                     screen.Render();
                     screen.Present();
@@ -220,6 +238,12 @@ namespace AATool
                 base.Draw(gameTime);
             }
             Debug.EndTiming("draw_main");
+        }
+
+        protected override void OnExiting(object sender, EventArgs args)
+        {
+            OverlayScreen?.RememberWindowPosition();
+            base.OnExiting(sender, args);
         }
 
         private void AddScreen(UIScreen screen)
@@ -294,14 +318,14 @@ namespace AATool
 
             //assign title to window
             if (PrimaryScreen is not null)
-                PrimaryScreen.Form.Text = "  " + FullTitle;
+                PrimaryScreen.Host.Title = "  " + FullTitle;
         }
 
         public static void QuitBecause(string reason, Exception exception = null)
         {
             //show user a message and quit if for some reason the program fails to load properly
             string caption = "Missing Assets";
-            if (File.Exists("AAUpdate.exe"))
+            if (Platform.SupportsAutoUpdate && File.Exists(Paths.System.UpdateExecutable))
             {
                 string message = $"One or more required assets failed to load!\n{reason}\n\nWould you like to repair your installation?";
                 if (exception is not null)

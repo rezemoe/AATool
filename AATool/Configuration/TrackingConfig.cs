@@ -25,7 +25,7 @@ namespace AATool.Configuration
 
             [JsonProperty] public readonly Setting<TrackerSource> Source = new (TrackerSource.ActiveInstance);
             [JsonProperty] public readonly Setting<string> CustomWorldPath = new (string.Empty);
-            [JsonProperty] public readonly Setting<string> CustomSavesPath = new (Paths.Saves.AppDataShortcut + "\\.minecraft\\saves");
+            [JsonProperty] public readonly Setting<string> CustomSavesPath = new (Paths.Saves.DefaultCustomSavesPath);
             [JsonProperty] public readonly Setting<bool> ManualChecklistMode = new (false);
 
             [JsonProperty] public readonly Setting<ProgressFilter> Filter = new (ProgressFilter.Combined);

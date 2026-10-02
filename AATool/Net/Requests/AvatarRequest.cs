@@ -131,7 +131,7 @@ namespace AATool.Net.Requests
                 //overwrite to keep skins up to date
                 Directory.CreateDirectory(Paths.System.AvatarCacheFolder);
                 using (FileStream fileStream = File.Create(fileName))
-                    texture.SaveAsPng(fileStream, texture.Width, texture.Height);
+                    MainThread.Invoke(() => texture.SaveAsPng(fileStream, texture.Width, texture.Height));
             }
             catch (IOException)
             {

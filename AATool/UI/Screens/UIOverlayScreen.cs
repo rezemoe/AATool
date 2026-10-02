@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.ComponentModel;
 using System.Linq;
-using System.Windows.Forms;
 using AATool.Configuration;
 using AATool.Data.Categories;
 using AATool.Data.Objectives;
@@ -14,7 +14,6 @@ using AATool.UI.Controls;
 using AATool.Utilities;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.TaskbarClock;
 
 namespace AATool.UI.Screens
 {
@@ -24,6 +23,8 @@ namespace AATool.UI.Screens
         private const int BaseScrollSpeed = 30;
         private const int HeaderSlideSpeed = 4;
         private const int HeaderHeight = 42;
+        private const int MinimumWidth = 1260;
+        private const int MaximumWidth = 4096;
 
         private const int HeaderProgress = 60;
         private const int HeaderCategory = 10;
@@ -51,27 +52,27 @@ namespace AATool.UI.Screens
         private UIControl runCompletePanel;
         private UIControl carouselPanel;
         private bool isResizing;
+        private Point renderSize;
+        private int minimumHeight;
         private Color frameBackColor;
         private Color frameBorderColor;
         private float titleY;
 
         private Utilities.Timer savingPinnedTimer = new (0.5, false);
+        private readonly Utilities.Timer resizeEndTimer = new (0.25, false);
 
         public override Color FrameBackColor() => this.frameBackColor;
         public override Color FrameBorderColor() => this.frameBorderColor;
 
         public void PinnedObjectivesSaved() => this.savingPinnedTimer.Reset();
 
-        public UIOverlayScreen(Main main) : base(main, GameWindow.Create(main, 360, 360))
+        public UIOverlayScreen(Main main) : base(main, new ScreenWindow("Stream Overlay", 360, 360))
         {
             //initialize window
-            this.Form.Text         = "Stream Overlay";
-            this.Form.ControlBox   = false;
-            this.Form.ResizeBegin += this.OnResizeBegin;
-            this.Form.ResizeEnd   += this.OnResizeEnd;
-            this.Form.Resize      += this.OnResize;
-            this.Form.FormClosing += this.OnClosing;
-            this.Window.AllowUserResizing = true;
+            this.Host.Resizable    = true;
+            this.Host.KeepRestored = true;
+            this.Host.Resized     += this.OnResize;
+            this.Host.Closing     += this.OnClosing;
 
             //cycle overlay header text
             this.titleTimer = new SequenceTimer(
@@ -89,10 +90,9 @@ namespace AATool.UI.Screens
             this.ReloadView();
 
             //enforce minimum size
-            this.Form.MinimumSize = new System.Drawing.Size(1260 + this.Form.Width - this.Form.ClientSize.Width, 
-                this.Height + this.Form.Height - this.Form.ClientSize.Height);
-            this.Form.MaximumSize = new System.Drawing.Size(4096 + this.Form.Width - this.Form.ClientSize.Width, 
-                this.Height + this.Form.Height - this.Form.ClientSize.Height);
+            this.minimumHeight = this.Height;
+            this.Host.SetMinimumSize(MinimumWidth, this.minimumHeight);
+            this.Host.SetMaximumSize(MaximumWidth, this.minimumHeight);
         }
 
         public override void Prepare()
@@ -122,20 +122,17 @@ namespace AATool.UI.Screens
             int height = this.Height;
 
             //enforce minimum size
-            if (this.Form.MinimumSize.Width > 0)
-                width = Math.Max(width, this.Form.MinimumSize.Width - (this.Form.Width - this.Form.ClientSize.Width));
-            if (this.Form.MinimumSize.Height > 0)
-                height = Math.Max(height, this.Form.MinimumSize.Height - (this.Form.Height - this.Form.ClientSize.Height));
+            width = Math.Max(width, MinimumWidth);
+            height = Math.Max(height, this.minimumHeight);
 
             if (width is 0 || height is 0)
                 return;
 
-            //resize window and create new render target of proper size
-            if (this.Target is null || this.Target.Width != width || this.Target.Height != height)
+            //resize window and layout to proper size
+            if (this.renderSize.X != width || this.renderSize.Y != height)
             {
-                this.Form.ClientSize = new System.Drawing.Size(width, height);
-                this.Target?.Dispose();
-                this.Target = new SwapChainRenderTarget(this.GraphicsDevice, this.Window.Handle, width, height);
+                this.renderSize = new Point(width, height);
+                this.Host.ClientSize = this.renderSize;
                 this.ResizeRecursive(new Rectangle(0, 0, width, height));
                 this.UpdateCarouselLocations();
             }
@@ -223,10 +220,18 @@ namespace AATool.UI.Screens
         protected override void UpdateThis(Time time)
         {
             //update enabled state
-            if (!this.Form.IsDisposed)
-                this.Form.Visible = Config.Overlay.Enabled;
-            if (!this.Form.Visible)
+            if (!this.Host.IsDisposed)
+                this.Host.Visible = Config.Overlay.Enabled;
+            if (!this.Host.Visible)
                 return;
+
+            //sdl doesn't report when the user stops resizing, so wait for resize events to settle
+            if (this.isResizing)
+            {
+                this.resizeEndTimer.Update(time);
+                if (this.resizeEndTimer.IsExpired)
+                    this.OnResizeEnd();
+            }
 
             if (Tracker.ObjectivesChanged || Config.Overlay.Enabled.Changed)
                 this.ReloadView();
@@ -429,13 +434,15 @@ namespace AATool.UI.Screens
             }
         }
 
-        private void RememberWindowPosition()
+        public void RememberWindowPosition()
         {
-            Config.Overlay.LastWindowPosition.Set(new Point(this.Form.Location.X, this.Form.Location.Y));
+            if (this.Host.IsDisposed || !this.Host.Visible)
+                return;
+            Config.Overlay.LastWindowPosition.Set(this.Host.Location);
             Config.Overlay.TrySave();
         }
 
-        private void OnResizeBegin(object sender, EventArgs e)
+        private void OnResizeBegin()
         {
             this.isResizing = true;
             this.advancements?.Break();
@@ -444,25 +451,33 @@ namespace AATool.UI.Screens
 
         private void OnResize(object sender, EventArgs e)
         {
-            if (this.Form.WindowState is FormWindowState.Minimized)
-                this.Form.WindowState = FormWindowState.Normal;
+            //ignore resizes caused by the overlay matching its configured width
+            Point size = this.Host.ClientSize;
+            if (size == this.renderSize)
+                return;
 
-            if (this.isResizing)
-                Config.Overlay.Width.Set(this.Form.ClientSize.Width);
+            if (!this.isResizing)
+                this.OnResizeBegin();
+            this.resizeEndTimer.Reset();
+            Config.Overlay.Width.Set(size.X);
         }
 
-        private void OnResizeEnd(object sender, EventArgs e)
+        private void OnResizeEnd()
         {
             this.isResizing = false;
             this.advancements?.Continue();
             this.criteria?.Continue();
-            Config.Overlay.Width.Set(this.Form.ClientSize.Width);
+            Config.Overlay.Width.Set(this.Host.ClientSize.X);
             Config.Overlay.TrySave();
         }
 
-        private void OnClosing(object sender, FormClosingEventArgs e)
+        private void OnClosing(object sender, CancelEventArgs e)
         {
+            //window managers always offer a close button, so treat closing as turning the overlay off
             this.RememberWindowPosition();
+            e.Cancel = true;
+            Config.Overlay.Enabled.Set(false);
+            Config.Overlay.TrySave();
         }
     }
 }
